@@ -47,18 +47,31 @@ class MainActivity : AppCompatActivity() {
     private fun handleIntent(intent: Intent?) {
         val action = intent?.action
         val data: Uri? = intent?.data
+        val type = intent?.type
 
-        val urlToLoad = if (Intent.ACTION_VIEW == action && data != null) {
-            data.toString()
-        } else {
-            // Default fallback
-            "https://en.mapy.cz"
+        var urlToLoad = "https://en.mapy.cz"
+        var parsedUri: Uri? = null
+
+        if (Intent.ACTION_VIEW == action && data != null) {
+            urlToLoad = data.toString()
+            parsedUri = data
+        } else if (Intent.ACTION_SEND == action && "text/plain" == type) {
+            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (sharedText != null) {
+                // Extract URL from shared text (sometimes sharing includes extra text before/after the URL)
+                val urlRegex = "(?i)\\b((?:https?://|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\((?:[^\\s()<>]+|\\([^\\s()<>]+\\))*\\))+(?:\\((?:[^\\s()<>]+|\\([^\\s()<>]+\\))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’]))".toRegex()
+                val matchResult = urlRegex.find(sharedText)
+                if (matchResult != null) {
+                    urlToLoad = matchResult.value
+                    parsedUri = Uri.parse(urlToLoad)
+                }
+            }
         }
 
         fullUrl = urlToLoad
 
-        if (data != null) {
-            parseCoordinatesFromUrl(data)
+        if (parsedUri != null) {
+            parseCoordinatesFromUrl(parsedUri)
         }
 
         // Add JS Interface for next steps

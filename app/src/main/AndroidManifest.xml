@@ -36,6 +36,13 @@
                 <data android:host="www.mapy.cz" />
                 <data android:host="www.mapy.com" />
             </intent-filter>
+
+            <!-- Intent filter to handle shared text (like URLs shared from other apps) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
     </application>
 
