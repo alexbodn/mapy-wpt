@@ -62,7 +62,12 @@ class MainActivity : AppCompatActivity() {
                 val urlRegex = "(?i)\\b((?:https?://|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\((?:[^\\s()<>]+|\\([^\\s()<>]+\\))*\\))+(?:\\((?:[^\\s()<>]+|\\([^\\s()<>]+\\))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’]))".toRegex()
                 val matchResult = urlRegex.find(sharedText)
                 if (matchResult != null) {
-                    urlToLoad = matchResult.value
+                    var extractedUrl = matchResult.value
+                    // If the URL is missing the scheme (e.g. "mapy.cz/s/abcde"), Uri.parse might not treat it as absolute
+                    if (!extractedUrl.startsWith("http://") && !extractedUrl.startsWith("https://")) {
+                        extractedUrl = "https://$extractedUrl"
+                    }
+                    urlToLoad = extractedUrl
                     parsedUri = Uri.parse(urlToLoad)
                 }
             }

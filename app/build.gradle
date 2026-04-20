@@ -12,8 +12,6 @@ android {
         minSdk 24
         targetSdk 34
 
-        // This allows CI to inject a version code via environment variable
-        // fallback to 1 if not running in CI.
         def ciVersion = System.getenv("GITHUB_RUN_NUMBER") as Integer
         versionCode ciVersion ?: 1
         versionName "1.0.${ciVersion ?: 0}"
@@ -21,10 +19,6 @@ android {
 
     signingConfigs {
         release {
-            // In a real environment, you'd use environment variables/secrets instead of hardcoding.
-            // For CI, we can define properties via command line or env vars.
-            // Using a dummy file here if not provided so it doesn't break local builds without the keystore,
-            // but the CI workflow will generate it securely.
             def tmpStoreFile = System.getenv("KEYSTORE_FILE")
             if (tmpStoreFile != null) {
                 storeFile file(tmpStoreFile)
@@ -44,8 +38,6 @@ android {
             }
         }
         debug {
-            // Use the default debug keystore. Updates should work fine as long as you're updating
-            // between builds signed by the same keystore (e.g. CI release builds).
         }
     }
     compileOptions {
@@ -63,4 +55,5 @@ dependencies {
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.webkit:webkit:1.7.0'
+    testImplementation 'junit:junit:4.13.2'
 }
