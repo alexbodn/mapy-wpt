@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace 'com.mapywptsaver'
-    compileSdk 33
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.mapywptsaver"
         minSdk 24
-        targetSdk 33
+        targetSdk 34
 
         // This allows CI to inject a version code via environment variable
         // fallback to 1 if not running in CI.
