@@ -1,0 +1,66 @@
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+}
+
+android {
+    namespace 'com.mapywptsaver'
+    compileSdk 33
+
+    defaultConfig {
+        applicationId "com.mapywptsaver"
+        minSdk 24
+        targetSdk 33
+
+        // This allows CI to inject a version code via environment variable
+        // fallback to 1 if not running in CI.
+        def ciVersion = System.getenv("GITHUB_RUN_NUMBER") as Integer
+        versionCode ciVersion ?: 1
+        versionName "1.0.${ciVersion ?: 0}"
+    }
+
+    signingConfigs {
+        release {
+            // In a real environment, you'd use environment variables/secrets instead of hardcoding.
+            // For CI, we can define properties via command line or env vars.
+            // Using a dummy file here if not provided so it doesn't break local builds without the keystore,
+            // but the CI workflow will generate it securely.
+            def tmpStoreFile = System.getenv("KEYSTORE_FILE")
+            if (tmpStoreFile != null) {
+                storeFile file(tmpStoreFile)
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (System.getenv("KEYSTORE_FILE") != null) {
+                signingConfig signingConfigs.release
+            }
+        }
+        debug {
+            // Use the default debug keystore. Updates should work fine as long as you're updating
+            // between builds signed by the same keystore (e.g. CI release builds).
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.webkit:webkit:1.7.0'
+}

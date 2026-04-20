@@ -1,0 +1,51 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Restore Keystore from Cache
+      id: restore-keystore
+      uses: actions/cache@v3
+      with:
+        path: ci-keystore.jks
+        key: android-keystore
+
+    - name: Generate Keystore if not cached
+      if: steps.restore-keystore.outputs.cache-hit != 'true'
+      run: |
+        keytool -genkey -v -keystore ci-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias key0 -storepass mapywptsaver -keypass mapywptsaver -dname "CN=MapyWptSaver, OU=Unknown, O=Unknown, L=Unknown, ST=Unknown, C=US"
+
+    - name: Build Release APK
+      env:
+        KEYSTORE_FILE: ../ci-keystore.jks
+        KEYSTORE_PASSWORD: mapywptsaver
+        KEY_ALIAS: key0
+        KEY_PASSWORD: mapywptsaver
+      run: ./gradlew assembleRelease
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: mapy-wpt-saver-release
+        path: app/build/outputs/apk/release/app-release.apk
