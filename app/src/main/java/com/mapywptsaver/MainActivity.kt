@@ -146,19 +146,43 @@ class MainActivity : AppCompatActivity() {
                             if (nodes.length > 0) {
                                 for (let i = 0; i < nodes.length; i++) {
                                     const text = nodes[i].innerText || '';
+
+                                    // Mapy sometimes separates point names (like "Alumot dam") from the coordinates.
+                                    // Usually they appear as titles right before or inside the point element.
+                                    // Turn-by-turn instructions often contain specific keywords.
+
                                     if (text.includes('N') && text.includes('E') && (text.match(/\d+\.\d+/g) || []).length >= 2) {
-                                        // This looks like a coordinate point marker (like the ones in the screenshot)
+                                        // This looks like a coordinate point marker
+
+                                        // Try to find an explicit title nearby in the DOM if we can
+                                        let pointTitle = '';
+                                        const titleNode = nodes[i].querySelector('.title, h1, h2, h3, h4, strong, b');
+                                        if (titleNode && titleNode.innerText) {
+                                            pointTitle = titleNode.innerText.trim();
+                                        } else if (i > 0) {
+                                            // Look at previous node to see if it's a short descriptive title without coordinates
+                                            const prevText = nodes[i-1].innerText || '';
+                                            if (prevText.length > 0 && prevText.length < 50 && !prevText.includes('N') && !prevText.toLowerCase().includes('turn')) {
+                                                pointTitle = prevText.replace(/\n+/g, ' ').trim();
+                                            }
+                                        }
+
+                                        if (pointTitle && pointTitle.length > 0 && pointTitle !== 'Start' && pointTitle !== 'Finish') {
+                                            currentSegment.unshift(pointTitle + '\n---'); // add title to the top of the segment
+                                        }
+
                                         if (currentSegment.length > 0) {
                                             instructions.push(currentSegment.join('\n'));
                                             currentSegment = [];
                                         } else if (instructions.length === 0 && segmentIndex === 0) {
                                             // First point, push empty if no instructions before it
-                                            instructions.push('');
+                                            instructions.push(pointTitle);
+                                        } else {
+                                            instructions.push(pointTitle);
                                         }
                                         segmentIndex++;
-                                    } else if (text.toLowerCase().includes('turn') || text.toLowerCase().includes('continue') || text.toLowerCase().includes('keep')) {
-                                        // Looks like an instruction
-                                        // Clean up text
+                                    } else if (text.toLowerCase().includes('turn') || text.toLowerCase().includes('continue') || text.toLowerCase().includes('keep') || text.toLowerCase().includes('head')) {
+                                        // Looks like a navigation instruction
                                         let cleanText = text.replace(/\n+/g, ' ').trim();
                                         if (cleanText) {
                                             currentSegment.push(cleanText);
