@@ -277,44 +277,45 @@ class MainActivity : AppCompatActivity() {
         view?.evaluateJavascript(js, null)
     }
 
+    private var pendingGpxContent: String? = null
+
     fun saveGpxFile(filename: String, content: String) {
+        pendingGpxContent = content
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/gpx+xml"
+            putExtra(Intent.EXTRA_TITLE, filename)
+        }
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // For Android 10 and above, use MediaStore.Downloads
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "application/gpx+xml")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-                }
-
-                val resolver = contentResolver
-                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-
-                if (uri != null) {
-                    val outputStream: OutputStream? = resolver.openOutputStream(uri)
-                    outputStream?.use {
-                        it.write(content.toByteArray())
-                    }
-                    Toast.makeText(this, "Saved $filename to Downloads", Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(this, "Failed to save file", Toast.LENGTH_LONG).show()
-                }
-            } else {
-                // For Android 9 and below, write directly to the public Downloads directory
-                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                if (!downloadsDir.exists()) {
-                    downloadsDir.mkdirs()
-                }
-                val file = java.io.File(downloadsDir, filename)
-                java.io.FileOutputStream(file).use {
-                    it.write(content.toByteArray())
-                }
-                Toast.makeText(this, "Saved $filename to Downloads", Toast.LENGTH_LONG).show()
-            }
+            startActivityForResult(intent, CREATE_FILE_REQUEST_CODE)
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(this, "Error saving file: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Failed to open save dialog", Toast.LENGTH_LONG).show()
         }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == CREATE_FILE_REQUEST_CODE && resultCode == RESULT_OK) {
+            data?.data?.let { uri ->
+                try {
+                    val outputStream: OutputStream? = contentResolver.openOutputStream(uri)
+                    outputStream?.use {
+                        it.write((pendingGpxContent ?: "").toByteArray())
+                    }
+                    Toast.makeText(this, "GPX file saved successfully!", Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(this, "Error saving file: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        // Clear pending content after saving or cancelling
+        pendingGpxContent = null
+    }
+
+    companion object {
+        private const val CREATE_FILE_REQUEST_CODE = 1001
     }
 
     private fun parseCoordinatesFromUrl(uri: Uri) {
