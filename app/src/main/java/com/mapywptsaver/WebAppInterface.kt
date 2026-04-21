@@ -35,4 +35,13 @@ class WebAppInterface(
             }
         }
     }
+
+    @JavascriptInterface
+    fun showToast(msg: String) {
+        if (mContext is MainActivity) {
+            mContext.runOnUiThread {
+                android.widget.Toast.makeText(mContext, msg, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 }

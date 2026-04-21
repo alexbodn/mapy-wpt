@@ -219,7 +219,15 @@ class MainActivity : AppCompatActivity() {
 
                 // Intercept clicks on links that might trigger direct download instead of blob
                 document.addEventListener('click', function(e) {
-                    const target = e.target.closest('a');
+                    const target = e.target.closest('a, button');
+
+                    if (target) {
+                        let text = target.innerText ? target.innerText.toLowerCase() : '';
+                        if (text.includes('export') || (target.href && target.href.includes('export'))) {
+                             AndroidInterface.showToast("Clicked Export! Tag: " + target.tagName + ", href: " + (target.href || "none") + ", class: " + target.className);
+                        }
+                    }
+
                     if (target && target.hasAttribute('download') && target.href && target.href.includes('blob:')) {
                         // The blob should have been intercepted above
                     } else if (target && target.href && target.href.includes('export') && target.href.includes('gpx')) {
