@@ -84,6 +84,8 @@ class MainActivity : AppCompatActivity() {
 
         setupWebViewClient()
         webView.loadUrl(urlToLoad)
+
+        Toast.makeText(this, "Loading: $urlToLoad", Toast.LENGTH_LONG).show()
     }
 
     private fun setupWebViewClient() {
