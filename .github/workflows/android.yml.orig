@@ -49,17 +49,17 @@ jobs:
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Mapy-to-GPX-Saver-release
+        name: mapy-wpt-saver-release
         path: app/build/outputs/apk/release/app-release.apk
 
     - name: Rename APK for Release
-      run: mv app/build/outputs/apk/release/app-release.apk Mapy-to-GPX-Saver-release-${{ github.run_number }}.apk
+      run: mv app/build/outputs/apk/release/app-release.apk MapyWptSaver-release-${{ github.run_number }}.apk
 
     - name: Create Release
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       uses: softprops/action-gh-release@v1
       with:
-        files: Mapy-to-GPX-Saver-release-${{ github.run_number }}.apk
+        files: MapyWptSaver-release-${{ github.run_number }}.apk
         tag_name: v1.0.${{ github.run_number }}
         name: Release v1.0.${{ github.run_number }}
         generate_release_notes: true

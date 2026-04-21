@@ -241,6 +241,37 @@ class MainActivity : AppCompatActivity() {
                             });
                     }
                 }, true);
+
+                // Override window.fetch to catch API calls returning GPX data
+                const originalFetch = window.fetch;
+                window.fetch = async function() {
+                    const response = await originalFetch.apply(this, arguments);
+                    const url = arguments[0];
+                    if (url && typeof url === 'string' && (url.includes('gpx') || url.includes('export'))) {
+                        const clone = response.clone();
+                        clone.text().then(text => {
+                            if (text && text.includes('<gpx')) {
+                                text = modifyGpx(text);
+                                AndroidInterface.onGpxDownloaded('mapy_export.gpx', text);
+                            }
+                        }).catch(err => console.error(err));
+                    }
+                    return response;
+                };
+
+                // Override XMLHttpRequest to catch old-school AJAX downloads
+                const originalXHRSend = XMLHttpRequest.prototype.send;
+                XMLHttpRequest.prototype.send = function() {
+                    this.addEventListener('load', function() {
+                        if (this.responseURL && (this.responseURL.includes('gpx') || this.responseURL.includes('export'))) {
+                            if (this.responseText && this.responseText.includes('<gpx')) {
+                                let modified = modifyGpx(this.responseText);
+                                AndroidInterface.onGpxDownloaded('mapy_export.gpx', modified);
+                            }
+                        }
+                    });
+                    originalXHRSend.apply(this, arguments);
+                };
             })();
         """.trimIndent()
         view?.evaluateJavascript(js, null)
