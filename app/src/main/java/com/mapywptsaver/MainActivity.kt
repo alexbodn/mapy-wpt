@@ -14,6 +14,12 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
 import java.io.OutputStream
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 
 class MainActivity : AppCompatActivity() {
 
@@ -109,10 +115,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun injectInterceptScript(view: WebView?) {
+        val coordsJson = WebAppInterface(this).getCoordinatesJson()
+        val srcUrl = fullUrl ?: ""
+
         val js = """
             (function() {
                 if (window.__wptIntercepted) return;
                 window.__wptIntercepted = true;
+
+                window.__mapyCoordsStr = '$coordsJson';
+                window.__mapySourceUrl = '$srcUrl';
 
                 // We want to intercept Blob creation to catch GPX downloads
                 const originalCreateObjectURL = URL.createObjectURL;
@@ -213,7 +225,11 @@ class MainActivity : AppCompatActivity() {
 
                 function modifyGpx(gpxText) {
                     try {
-                        const coordsStr = AndroidInterface.getCoordinatesJson();
+                        let coordsStr = window.__mapyCoordsStr || '[]';
+                        // Fallback just in case script injected early
+                        if (coordsStr === '[]') {
+                             coordsStr = AndroidInterface.getCoordinatesJson();
+                        }
                         const coords = JSON.parse(coordsStr);
 
                         if (!coords || coords.length === 0) {
@@ -221,7 +237,10 @@ class MainActivity : AppCompatActivity() {
                             return gpxText;
                         }
 
-                        const sourceUrl = AndroidInterface.getSourceUrl();
+                        let sourceUrl = window.__mapySourceUrl || '';
+                        if (!sourceUrl) {
+                            sourceUrl = AndroidInterface.getSourceUrl();
+                        }
                         const scrapedInstructions = extractItineraryInstructions();
 
                         let wptXml = '';
@@ -233,9 +252,10 @@ class MainActivity : AppCompatActivity() {
                             wptXml += '  <wpt lat="' + coords[i].lat + '" lon="' + coords[i].lon + '">\n';
                             wptXml += '    <name>' + (i + 1) + '</name>\n';
 
-                            // Attach instructions to the ongoing wpt.
-                            if (i < scrapedInstructions.length) {
-                                const descText = scrapedInstructions[i];
+                            // Attach instructions towards each point (skip first)
+                            // If i=1 (Point 2), it gets the itinerary from Point 1 (index 0).
+                            if (i > 0 && i - 1 < scrapedInstructions.length) {
+                                const descText = scrapedInstructions[i - 1];
                                 if (descText) {
                                     // Escape XML
                                     const escapedDesc = descText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
@@ -377,27 +397,56 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun parseCoordinatesFromUrl(uri: Uri) {
+        val riParams = uri.getQueryParameters("ri")
+        if (riParams.isEmpty()) return
+
         coordinatesList.clear()
 
-        // The Mapy URL has multiple 'ri=' query parameters.
-        // Some are IDs (like 1018994021), others are lat,lon pairs separated by comma
-        // Mapy uses lon,lat or lat,lon.
-        // Based on the example: ri=35.553835183382034%2C32.666597440838814
-        // Typically longitude,latitude in mapping APIs or vice-versa.
-
-        val riParams = uri.getQueryParameters("ri")
-        for (ri in riParams) {
-            if (ri.contains(",")) {
-                val parts = ri.split(",")
-                if (parts.size == 2) {
+        CoroutineScope(Dispatchers.IO).launch {
+            val fetchedCoords = mutableListOf<Pair<Double, Double>>()
+            for (ri in riParams) {
+                if (ri.contains(",")) {
+                    val parts = ri.split(",")
+                    if (parts.size == 2) {
+                        try {
+                            val lon = parts[0].toDouble()
+                            val lat = parts[1].toDouble()
+                            fetchedCoords.add(Pair(lon, lat))
+                        } catch (e: NumberFormatException) {
+                            // ignore invalid numbers
+                        }
+                    }
+                } else {
+                    // Try to fetch OSM ID
                     try {
-                        val lon = parts[0].toDouble()
-                        val lat = parts[1].toDouble()
-                        coordinatesList.add(Pair(lon, lat))
-                    } catch (e: NumberFormatException) {
-                        // ignore invalid numbers
+                        val osmId = ri.toLong()
+                        val osmUrl = URL("https://api.openstreetmap.org/api/0.6/node/$osmId")
+                        val connection = osmUrl.openConnection() as HttpsURLConnection
+                        connection.requestMethod = "GET"
+                        connection.connectTimeout = 5000
+                        connection.readTimeout = 5000
+
+                        if (connection.responseCode == 200) {
+                            val response = connection.inputStream.bufferedReader().use { it.readText() }
+                            // Extract lat/lon from XML using simple regex for performance/simplicity
+                            val latMatch = "lat=\"([^\"]+)\"".toRegex().find(response)
+                            val lonMatch = "lon=\"([^\"]+)\"".toRegex().find(response)
+                            if (latMatch != null && lonMatch != null) {
+                                val lat = latMatch.groupValues[1].toDouble()
+                                val lon = lonMatch.groupValues[1].toDouble()
+                                fetchedCoords.add(Pair(lon, lat))
+                            }
+                        }
+                        connection.disconnect()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
                 }
+            }
+
+            withContext(Dispatchers.Main) {
+                coordinatesList.clear()
+                coordinatesList.addAll(fetchedCoords)
             }
         }
     }
