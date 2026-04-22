@@ -92,6 +92,17 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+
+                // Sometimes the page redirects (e.g., from mapy.com/s/xyz to a full URL with 'ri' params)
+                // We should re-parse the URL here to capture any coordinates if we missed them initially.
+                if (url != null) {
+                    val currentUri = Uri.parse(url)
+                    if (currentUri.getQueryParameters("ri").isNotEmpty()) {
+                        fullUrl = url
+                        parseCoordinatesFromUrl(currentUri)
+                    }
+                }
+
                 injectInterceptScript(view)
             }
         }
