@@ -258,7 +258,8 @@ class MainActivity : AppCompatActivity() {
                         if (gpxTagIndex >= 0 && gpxTagEnd > 0) {
                             let gpxOpenTag = gpxText.substring(gpxTagIndex, gpxTagEnd);
                             if (!gpxOpenTag.includes('xmlns:osmand')) {
-                                gpxOpenTag = gpxOpenTag.replace(/>\s*$/, ' xmlns:osmand="https://osmand.net">');
+                                // robust insertion before the closing >
+                                gpxOpenTag = gpxOpenTag.replace(/>/, ' xmlns:osmand="https://osmand.net">');
                             }
                             gpxText = gpxText.substring(0, gpxTagIndex) + gpxOpenTag + '\n' + wptXml + gpxText.substring(gpxTagEnd);
                         }
