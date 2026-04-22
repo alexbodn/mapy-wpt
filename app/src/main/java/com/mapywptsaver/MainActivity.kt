@@ -115,16 +115,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun injectInterceptScript(view: WebView?) {
-        val coordsJson = WebAppInterface(this).getCoordinatesJson()
-        val srcUrl = fullUrl ?: ""
-
         val js = """
             (function() {
                 if (window.__wptIntercepted) return;
                 window.__wptIntercepted = true;
-
-                window.__mapyCoordsStr = '$coordsJson';
-                window.__mapySourceUrl = '$srcUrl';
 
                 // We want to intercept Blob creation to catch GPX downloads
                 const originalCreateObjectURL = URL.createObjectURL;
@@ -225,11 +219,7 @@ class MainActivity : AppCompatActivity() {
 
                 function modifyGpx(gpxText) {
                     try {
-                        let coordsStr = window.__mapyCoordsStr || '[]';
-                        // Fallback just in case script injected early
-                        if (coordsStr === '[]') {
-                             coordsStr = AndroidInterface.getCoordinatesJson();
-                        }
+                        const coordsStr = AndroidInterface.getCoordinatesJson();
                         const coords = JSON.parse(coordsStr);
 
                         if (!coords || coords.length === 0) {
@@ -237,10 +227,7 @@ class MainActivity : AppCompatActivity() {
                             return gpxText;
                         }
 
-                        let sourceUrl = window.__mapySourceUrl || '';
-                        if (!sourceUrl) {
-                            sourceUrl = AndroidInterface.getSourceUrl();
-                        }
+                        const sourceUrl = AndroidInterface.getSourceUrl();
                         const scrapedInstructions = extractItineraryInstructions();
 
                         let wptXml = '';
