@@ -383,59 +383,74 @@ class MainActivity : AppCompatActivity() {
         return fullUrl
     }
 
+    private var lastParsedUrlQuery: String? = null
+
     private fun parseCoordinatesFromUrl(uri: Uri) {
         val riParams = uri.getQueryParameters("ri")
         if (riParams.isEmpty()) return
 
-        coordinatesList.clear()
+        // Prevent repeated fetches for the exact same query params
+        val currentQuery = uri.query
+        if (currentQuery == lastParsedUrlQuery && coordinatesList.isNotEmpty()) {
+            return
+        }
+        lastParsedUrlQuery = currentQuery
 
         CoroutineScope(Dispatchers.IO).launch {
-            val fetchedCoords = mutableListOf<Pair<Double, Double>>()
-            for (riRaw in riParams) {
-                // ri params can be encoded, e.g. "35.5%2C32.6"
-                val ri = riRaw.replace("%2C", ",")
-                if (ri.contains(",")) {
-                    val parts = ri.split(",")
-                    if (parts.size >= 2) {
-                        try {
-                            val lon = parts[0].toDouble()
-                            val lat = parts[1].toDouble()
-                            fetchedCoords.add(Pair(lon, lat))
-                        } catch (e: NumberFormatException) {
-                            // ignore invalid numbers
-                        }
-                    }
-                } else {
-                    // Try to fetch OSM ID
-                    try {
-                        val osmId = ri.toLong()
-                        val osmUrl = URL("https://api.openstreetmap.org/api/0.6/node/$osmId")
-                        val connection = osmUrl.openConnection() as HttpsURLConnection
-                        connection.requestMethod = "GET"
-                        connection.connectTimeout = 5000
-                        connection.readTimeout = 5000
+            // Use a temporary list mapped to preserve order even if fetched asynchronously
+            val fetchedCoords = arrayOfNulls<Pair<Double, Double>>(riParams.size)
 
-                        if (connection.responseCode == 200) {
-                            val response = connection.inputStream.bufferedReader().use { it.readText() }
-                            // Extract lat/lon from XML using simple regex for performance/simplicity
-                            val latMatch = "lat=\"([^\"]+)\"".toRegex().find(response)
-                            val lonMatch = "lon=\"([^\"]+)\"".toRegex().find(response)
-                            if (latMatch != null && lonMatch != null) {
-                                val lat = latMatch.groupValues[1].toDouble()
-                                val lon = lonMatch.groupValues[1].toDouble()
-                                fetchedCoords.add(Pair(lon, lat))
-                            }
+            // Launch parallel fetches for OSM IDs
+            val jobs = riParams.mapIndexed { index, riRaw ->
+                launch {
+                    val ri = riRaw.replace("%2C", ",")
+                    if (ri.contains(",")) {
+                        val parts = ri.split(",")
+                        if (parts.size >= 2) {
+                            try {
+                                val lon = parts[0].toDouble()
+                                val lat = parts[1].toDouble()
+                                fetchedCoords[index] = Pair(lon, lat)
+                            } catch (e: NumberFormatException) { }
                         }
-                        connection.disconnect()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    } else {
+                        try {
+                            val osmId = ri.toLong()
+                            val osmUrl = URL("https://api.openstreetmap.org/api/0.6/node/$osmId")
+                            val connection = osmUrl.openConnection() as HttpsURLConnection
+                            connection.requestMethod = "GET"
+                            // OSM requires a user agent or it throws 403 / times out
+                            connection.setRequestProperty("User-Agent", "MapyWptSaver/1.0 (Android)")
+                            connection.connectTimeout = 3000
+                            connection.readTimeout = 3000
+
+                            if (connection.responseCode == 200) {
+                                val response = connection.inputStream.bufferedReader().use { it.readText() }
+                                val latMatch = "lat=\"([^\"]+)\"".toRegex().find(response)
+                                val lonMatch = "lon=\"([^\"]+)\"".toRegex().find(response)
+                                if (latMatch != null && lonMatch != null) {
+                                    val lat = latMatch.groupValues[1].toDouble()
+                                    val lon = lonMatch.groupValues[1].toDouble()
+                                    fetchedCoords[index] = Pair(lon, lat)
+                                }
+                            }
+                            connection.disconnect()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
                 }
             }
 
-            withContext(Dispatchers.Main) {
-                coordinatesList.clear()
-                coordinatesList.addAll(fetchedCoords)
+            // Wait for all fetches to finish
+            jobs.forEach { it.join() }
+
+            val validCoords = fetchedCoords.filterNotNull()
+            if (validCoords.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    coordinatesList.clear()
+                    coordinatesList.addAll(validCoords)
+                }
             }
         }
     }
