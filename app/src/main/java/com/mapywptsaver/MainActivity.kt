@@ -80,7 +80,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Add JS Interface for next steps
-        webView.addJavascriptInterface(WebAppInterface(this, coordinatesList, fullUrl), "AndroidInterface")
+        webView.addJavascriptInterface(WebAppInterface(this), "AndroidInterface")
 
         setupWebViewClient()
         webView.loadUrl(urlToLoad)
@@ -361,6 +361,14 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val CREATE_FILE_REQUEST_CODE = 1001
+    }
+
+    fun getCoordinatesList(): List<Pair<Double, Double>> {
+        return coordinatesList
+    }
+
+    fun getFullUrl(): String? {
+        return fullUrl
     }
 
     private fun parseCoordinatesFromUrl(uri: Uri) {

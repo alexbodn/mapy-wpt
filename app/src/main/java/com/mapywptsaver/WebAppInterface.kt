@@ -4,27 +4,32 @@ import android.content.Context
 import android.webkit.JavascriptInterface
 
 class WebAppInterface(
-    private val mContext: Context,
-    private val coordinates: List<Pair<Double, Double>>,
-    private val sourceUrl: String?
+    private val mContext: Context
 ) {
 
     @JavascriptInterface
     fun getCoordinatesJson(): String {
-        val sb = StringBuilder("[")
-        for ((index, coord) in coordinates.withIndex()) {
-            sb.append("{\"lon\":${coord.first},\"lat\":${coord.second}}")
-            if (index < coordinates.size - 1) {
-                sb.append(",")
+        if (mContext is MainActivity) {
+            val coords = mContext.getCoordinatesList()
+            val sb = StringBuilder("[")
+            for ((index, coord) in coords.withIndex()) {
+                sb.append("{\"lon\":${coord.first},\"lat\":${coord.second}}")
+                if (index < coords.size - 1) {
+                    sb.append(",")
+                }
             }
+            sb.append("]")
+            return sb.toString()
         }
-        sb.append("]")
-        return sb.toString()
+        return "[]"
     }
 
     @JavascriptInterface
     fun getSourceUrl(): String {
-        return sourceUrl ?: ""
+        if (mContext is MainActivity) {
+            return mContext.getFullUrl() ?: ""
+        }
+        return ""
     }
 
     @JavascriptInterface
