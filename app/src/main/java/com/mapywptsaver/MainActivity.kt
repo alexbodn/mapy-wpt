@@ -391,10 +391,12 @@ class MainActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.IO).launch {
             val fetchedCoords = mutableListOf<Pair<Double, Double>>()
-            for (ri in riParams) {
+            for (riRaw in riParams) {
+                // ri params can be encoded, e.g. "35.5%2C32.6"
+                val ri = riRaw.replace("%2C", ",")
                 if (ri.contains(",")) {
                     val parts = ri.split(",")
-                    if (parts.size == 2) {
+                    if (parts.size >= 2) {
                         try {
                             val lon = parts[0].toDouble()
                             val lat = parts[1].toDouble()
