@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- A simple representation of a map and the text eX -->
+    <!-- Simplified Map outline -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,30 L45,25 L65,35 L80,25 L80,75 L65,85 L45,75 L30,85 Z" />
+    <path
+        android:strokeColor="#DDDDDD"
+        android:strokeWidth="2"
+        android:pathData="M45,25 L45,75" />
+    <path
+        android:strokeColor="#DDDDDD"
+        android:strokeWidth="2"
+        android:pathData="M65,35 L65,85" />
+
+    <!-- Red pin marker -->
+    <path
+        android:fillColor="#FF0000"
+        android:pathData="M55,40 C60,40 64,44 64,49 C64,56 55,68 55,68 C55,68 46,56 46,49 C46,44 50,40 55,40 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55,46 C56.6,46 58,47.4 58,49 C58,50.6 56.6,52 55,52 C53.4,52 52,50.6 52,49 C52,47.4 53.4,46 55,46 Z" />
+
+    <!-- Text 'eX' overlay at bottom right -->
+    <path
+        android:fillColor="#FFCC00"
+        android:pathData="M 68,68 C 66,68 64,69 64,71 C 64,73 66,74 68,74 C 69,74 70,73.5 70,72 L 68,72 C 68,72.5 67,73 66,73 C 65,73 65,71 66,71 L 70,71 C 70,69 69,68 68,68 Z M 66,70 C 66,69 67,69 68,69 C 69,69 69,69 69,70 L 66,70 Z" />
+
+    <!-- X -->
+    <path
+        android:fillColor="#FFCC00"
+        android:pathData="M 72,68 L 74,68 L 76,71 L 78,68 L 80,68 L 77,72.5 L 80,77 L 78,77 L 76,74 L 74,77 L 72,77 L 75,72.5 Z" />
+
+</vector>

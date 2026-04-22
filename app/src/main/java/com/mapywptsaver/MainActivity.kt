@@ -217,7 +217,6 @@ class MainActivity : AppCompatActivity() {
                         const coords = JSON.parse(coordsStr);
 
                         if (!coords || coords.length === 0) {
-                            AndroidInterface.showToast("Warning: No coordinates found in URL to inject!");
                             return gpxText;
                         }
 
@@ -233,16 +232,22 @@ class MainActivity : AppCompatActivity() {
                             wptXml += '  <wpt lat="' + coords[i].lat + '" lon="' + coords[i].lon + '">\n';
                             wptXml += '    <name>' + (i + 1) + '</name>\n';
 
-                            // Attach instructions to the following wpt.
-                            // If i=1 (Point 2), attach the instructions collected after Point 1.
-                            if (i > 0 && scrapedInstructions.length >= i) {
-                                const descText = scrapedInstructions[i - 1];
+                            // Attach instructions to the ongoing wpt.
+                            if (i < scrapedInstructions.length) {
+                                const descText = scrapedInstructions[i];
                                 if (descText) {
                                     // Escape XML
                                     const escapedDesc = descText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
                                     wptXml += '    <desc>' + escapedDesc + '</desc>\n';
                                 }
                             }
+
+                            // OsmAnd styling extensions
+                            wptXml += '    <extensions>\n';
+                            wptXml += '      <osmand:icon>number_' + (i + 1) + '</osmand:icon>\n';
+                            wptXml += '      <osmand:background>circle</osmand:background>\n';
+                            wptXml += '      <osmand:color>#ee2222</osmand:color>\n';
+                            wptXml += '    </extensions>\n';
 
                             wptXml += '  </wpt>\n';
                         }
@@ -251,14 +256,14 @@ class MainActivity : AppCompatActivity() {
                         const gpxTagIndex = gpxText.toLowerCase().indexOf('<gpx');
                         const gpxTagEnd = gpxText.indexOf('>', gpxTagIndex) + 1;
                         if (gpxTagIndex >= 0 && gpxTagEnd > 0) {
-                            gpxText = gpxText.substring(0, gpxTagEnd) + '\n' + wptXml + gpxText.substring(gpxTagEnd);
-                            AndroidInterface.showToast("Successfully injected " + coords.length + " waypoints!");
-                        } else {
-                            AndroidInterface.showToast("Warning: Could not find <gpx> tag to inject into!");
+                            let gpxOpenTag = gpxText.substring(gpxTagIndex, gpxTagEnd);
+                            if (!gpxOpenTag.includes('xmlns:osmand')) {
+                                gpxOpenTag = gpxOpenTag.substring(0, gpxOpenTag.length - 1) + ' xmlns:osmand="https://osmand.net" >';
+                            }
+                            gpxText = gpxText.substring(0, gpxTagIndex) + gpxOpenTag + '\n' + wptXml + gpxText.substring(gpxTagEnd);
                         }
                         return gpxText;
                     } catch (e) {
-                        AndroidInterface.showToast("Error modifying GPX: " + e.message);
                         return gpxText;
                     }
                 }
@@ -266,13 +271,6 @@ class MainActivity : AppCompatActivity() {
                 // Intercept clicks on links that might trigger direct download instead of blob
                 document.addEventListener('click', function(e) {
                     const target = e.target.closest('a, button');
-
-                    if (target) {
-                        let text = target.innerText ? target.innerText.toLowerCase() : '';
-                        if (text.includes('export') || (target.href && target.href.includes('export'))) {
-                             AndroidInterface.showToast("Clicked Export! Tag: " + target.tagName + ", href: " + (target.href || "none") + ", class: " + target.className);
-                        }
-                    }
 
                     if (target && target.hasAttribute('download') && target.href && target.href.includes('blob:')) {
                         // The blob should have been intercepted above
