@@ -204,6 +204,12 @@ class MainActivity : AppCompatActivity() {
                     try {
                         const coordsStr = AndroidInterface.getCoordinatesJson();
                         const coords = JSON.parse(coordsStr);
+
+                        if (!coords || coords.length === 0) {
+                            AndroidInterface.showToast("Warning: No coordinates found in URL to inject!");
+                            return gpxText;
+                        }
+
                         const sourceUrl = AndroidInterface.getSourceUrl();
                         const scrapedInstructions = extractItineraryInstructions();
 
@@ -230,13 +236,18 @@ class MainActivity : AppCompatActivity() {
                             wptXml += '  </wpt>\n';
                         }
 
-                        // Insert after <gpx ...>
-                        const gpxTagEnd = gpxText.indexOf('>', gpxText.indexOf('<gpx')) + 1;
-                        if (gpxTagEnd > 0) {
+                        // Insert after <gpx ...> (case-insensitive search just in case)
+                        const gpxTagIndex = gpxText.toLowerCase().indexOf('<gpx');
+                        const gpxTagEnd = gpxText.indexOf('>', gpxTagIndex) + 1;
+                        if (gpxTagIndex >= 0 && gpxTagEnd > 0) {
                             gpxText = gpxText.substring(0, gpxTagEnd) + '\n' + wptXml + gpxText.substring(gpxTagEnd);
+                            AndroidInterface.showToast("Successfully injected " + coords.length + " waypoints!");
+                        } else {
+                            AndroidInterface.showToast("Warning: Could not find <gpx> tag to inject into!");
                         }
                         return gpxText;
                     } catch (e) {
+                        AndroidInterface.showToast("Error modifying GPX: " + e.message);
                         return gpxText;
                     }
                 }
