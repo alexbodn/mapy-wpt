@@ -217,6 +217,7 @@ class MainActivity : AppCompatActivity() {
                         const coords = JSON.parse(coordsStr);
 
                         if (!coords || coords.length === 0) {
+                            AndroidInterface.showToast("No coords found to inject!");
                             return gpxText;
                         }
 
@@ -262,9 +263,13 @@ class MainActivity : AppCompatActivity() {
                                 gpxOpenTag = gpxOpenTag.replace(/>/, ' xmlns:osmand="https://osmand.net">');
                             }
                             gpxText = gpxText.substring(0, gpxTagIndex) + gpxOpenTag + '\n' + wptXml + gpxText.substring(gpxTagEnd);
+                            AndroidInterface.showToast("Injected " + coords.length + " wpts!");
+                        } else {
+                            AndroidInterface.showToast("Could not find <gpx tag!");
                         }
                         return gpxText;
                     } catch (e) {
+                        AndroidInterface.showToast("Error modifying GPX: " + e.message);
                         return gpxText;
                     }
                 }
