@@ -391,7 +391,7 @@ class MainActivity : AppCompatActivity() {
 
         // Prevent repeated fetches for the exact same query params
         val currentQuery = uri.query
-        if (currentQuery == lastParsedUrlQuery && coordinatesList.isNotEmpty()) {
+        if (currentQuery == lastParsedUrlQuery) {
             return
         }
         lastParsedUrlQuery = currentQuery
@@ -450,6 +450,30 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     coordinatesList.clear()
                     coordinatesList.addAll(validCoords)
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    // Try parsing the query manually if Uri.getQueryParameters failed to extract `ri` parts properly due to fragments
+                    val manualCoords = mutableListOf<Pair<Double, Double>>()
+                    val query = uri.query ?: uri.encodedQuery ?: ""
+                    val pairs = query.split("&")
+                    for (pair in pairs) {
+                        if (pair.startsWith("ri=")) {
+                            val ri = pair.substring(3).replace("%2C", ",")
+                            val parts = ri.split(",")
+                            if (parts.size >= 2) {
+                                try {
+                                    val lon = parts[0].toDouble()
+                                    val lat = parts[1].toDouble()
+                                    manualCoords.add(Pair(lon, lat))
+                                } catch(e: Exception) {}
+                            }
+                        }
+                    }
+                    if (manualCoords.isNotEmpty()) {
+                        coordinatesList.clear()
+                        coordinatesList.addAll(manualCoords)
+                    }
                 }
             }
         }
