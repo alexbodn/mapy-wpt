@@ -24,7 +24,8 @@ import javax.net.ssl.HttpsURLConnection
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private var coordinatesList = mutableListOf<Pair<Double, Double>>()
+    data class WptCoord(val lon: Double, val lat: Double, val isOsm: Boolean = false)
+    private var coordinatesList = mutableListOf<WptCoord>()
     private var fullUrl: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -241,20 +242,31 @@ class MainActivity : AppCompatActivity() {
 
                             // Attach instructions towards each point (skip first)
                             // If i=1 (Point 2), it gets the itinerary from Point 1 (index 0).
+                            let descParts = [];
+
+                            if (coords[i].isOsm) {
+                                descParts.push("Source: OpenStreetMap");
+                            }
+
+                            // Attach instructions towards each point (skip first)
                             if (i > 0 && i - 1 < scrapedInstructions.length) {
                                 const descText = scrapedInstructions[i - 1];
                                 if (descText) {
-                                    // Escape XML
-                                    const escapedDesc = descText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-                                    wptXml += '    <desc>' + escapedDesc + '</desc>\n';
+                                    descParts.push(descText);
                                 }
+                            }
+
+                            if (descParts.length > 0) {
+                                const combinedDesc = descParts.join("\n\n");
+                                const escapedDesc = combinedDesc.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+                                wptXml += '    <desc>' + escapedDesc + '</desc>\n';
                             }
 
                             // OsmAnd styling extensions
                             wptXml += '    <extensions>\n';
+                            wptXml += '      <osmand:color>#ff0000</osmand:color>\n';
                             wptXml += '      <osmand:icon>number_' + (i + 1) + '</osmand:icon>\n';
                             wptXml += '      <osmand:background>circle</osmand:background>\n';
-                            wptXml += '      <osmand:color>#ee2222</osmand:color>\n';
                             wptXml += '    </extensions>\n';
 
                             wptXml += '  </wpt>\n';
@@ -375,7 +387,7 @@ class MainActivity : AppCompatActivity() {
         private const val CREATE_FILE_REQUEST_CODE = 1001
     }
 
-    fun getCoordinatesList(): List<Pair<Double, Double>> {
+    fun getCoordinatesList(): List<WptCoord> {
         return coordinatesList
     }
 
@@ -398,7 +410,7 @@ class MainActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.IO).launch {
             // Use a temporary list mapped to preserve order even if fetched asynchronously
-            val fetchedCoords = arrayOfNulls<Pair<Double, Double>>(riParams.size)
+            val fetchedCoords = arrayOfNulls<WptCoord>(riParams.size)
 
             // Launch parallel fetches for OSM IDs
             val jobs = riParams.mapIndexed { index, riRaw ->
@@ -410,7 +422,7 @@ class MainActivity : AppCompatActivity() {
                             try {
                                 val lon = parts[0].toDouble()
                                 val lat = parts[1].toDouble()
-                                fetchedCoords[index] = Pair(lon, lat)
+                                fetchedCoords[index] = WptCoord(lon, lat, false)
                             } catch (e: NumberFormatException) { }
                         }
                     } else {
@@ -431,7 +443,7 @@ class MainActivity : AppCompatActivity() {
                                 if (latMatch != null && lonMatch != null) {
                                     val lat = latMatch.groupValues[1].toDouble()
                                     val lon = lonMatch.groupValues[1].toDouble()
-                                    fetchedCoords[index] = Pair(lon, lat)
+                                    fetchedCoords[index] = WptCoord(lon, lat, true)
                                 }
                             }
                             connection.disconnect()
@@ -454,7 +466,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 withContext(Dispatchers.Main) {
                     // Try parsing the query manually if Uri.getQueryParameters failed to extract `ri` parts properly due to fragments
-                    val manualCoords = mutableListOf<Pair<Double, Double>>()
+                    val manualCoords = mutableListOf<WptCoord>()
                     val query = uri.query ?: uri.encodedQuery ?: ""
                     val pairs = query.split("&")
                     for (pair in pairs) {
@@ -465,7 +477,7 @@ class MainActivity : AppCompatActivity() {
                                 try {
                                     val lon = parts[0].toDouble()
                                     val lat = parts[1].toDouble()
-                                    manualCoords.add(Pair(lon, lat))
+                                    manualCoords.add(WptCoord(lon, lat, false))
                                 } catch(e: Exception) {}
                             }
                         }

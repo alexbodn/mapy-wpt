@@ -13,7 +13,7 @@ class WebAppInterface(
             val coords = mContext.getCoordinatesList()
             val sb = StringBuilder("[")
             for ((index, coord) in coords.withIndex()) {
-                sb.append("{\"lon\":${coord.first},\"lat\":${coord.second}}")
+                sb.append("{\"lon\":${coord.lon},\"lat\":${coord.lat},\"isOsm\":${coord.isOsm}}")
                 if (index < coords.size - 1) {
                     sb.append(",")
                 }
