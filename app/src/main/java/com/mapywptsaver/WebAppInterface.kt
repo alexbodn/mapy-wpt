@@ -11,12 +11,18 @@ class WebAppInterface(
     fun getCoordinatesJson(): String {
         if (mContext is MainActivity) {
             val coords = mContext.getCoordinatesList()
+            val instructions = mContext.getScrapedInstructions()
             val sb = StringBuilder("[")
             for ((index, coord) in coords.withIndex()) {
                 val lonStr = coord.lon?.toString() ?: "null"
                 val latStr = coord.lat?.toString() ?: "null"
                 val rawIdStr = coord.rawId?.let { "\"$it\"" } ?: "null"
-                sb.append("{\"lon\":$lonStr,\"lat\":$latStr,\"isOsm\":${coord.isOsm},\"rawId\":$rawIdStr}")
+                val instructionText = if (index > 0 && index - 1 < instructions.size) {
+                    "\"" + instructions[index - 1].replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "") + "\""
+                } else {
+                    "null"
+                }
+                sb.append("{\"lon\":$lonStr,\"lat\":$latStr,\"isOsm\":${coord.isOsm},\"rawId\":$rawIdStr,\"instruction\":$instructionText}")
                 if (index < coords.size - 1) {
                     sb.append(",")
                 }
@@ -50,6 +56,13 @@ class WebAppInterface(
             mContext.runOnUiThread {
                 android.widget.Toast.makeText(mContext, msg, android.widget.Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    @JavascriptInterface
+    fun saveInstructions(instructionsJson: String) {
+        if (mContext is MainActivity) {
+            mContext.saveScrapedInstructions(instructionsJson)
         }
     }
 }

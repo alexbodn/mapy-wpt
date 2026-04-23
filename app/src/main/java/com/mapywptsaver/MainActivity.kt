@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     data class WptCoord(val lon: Double?, val lat: Double?, val isOsm: Boolean = false, val rawId: String? = null)
     private var coordinatesList = mutableListOf<WptCoord>()
+    private var lastRcParam: String? = null
     private var fullUrl: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -215,8 +216,15 @@ class MainActivity : AppCompatActivity() {
                     } catch (e) {
                         console.error('Error scraping itinerary', e);
                     }
+                    // Send to Android immediately after scraping just in case
+                    AndroidInterface.saveInstructions(JSON.stringify(instructions));
                     return instructions;
                 }
+
+                // Do a periodic scrape to keep instructions updated
+                setInterval(() => {
+                   extractItineraryInstructions();
+                }, 2000);
 
                 function modifyGpx(gpxText) {
                     try {
@@ -229,7 +237,6 @@ class MainActivity : AppCompatActivity() {
                         }
 
                         const sourceUrl = AndroidInterface.getSourceUrl();
-                        const scrapedInstructions = extractItineraryInstructions();
 
                         let wptXml = '';
                         if (sourceUrl) {
@@ -247,20 +254,15 @@ class MainActivity : AppCompatActivity() {
                             wptXml += '  <wpt lat="' + coords[i].lat + '" lon="' + coords[i].lon + '">\n';
                             wptXml += '    <name>' + (i + 1) + '</name>\n';
 
-                            // Attach instructions towards each point (skip first)
-                            // If i=1 (Point 2), it gets the itinerary from Point 1 (index 0).
                             let descParts = [];
 
                             if (coords[i].isOsm) {
                                 descParts.push("Source: OpenStreetMap");
                             }
 
-                            // Attach instructions towards each point (skip first)
-                            if (i > 0 && i - 1 < scrapedInstructions.length) {
-                                const descText = scrapedInstructions[i - 1];
-                                if (descText) {
-                                    descParts.push(descText);
-                                }
+                            // Instruction comes from Android backend directly via JSON now
+                            if (coords[i].instruction) {
+                                descParts.push(coords[i].instruction);
                             }
 
                             if (descParts.length > 0) {
@@ -398,6 +400,30 @@ class MainActivity : AppCompatActivity() {
         return coordinatesList
     }
 
+    private var scrapedInstructionsList: List<String> = emptyList()
+
+    fun saveScrapedInstructions(jsonArrayString: String) {
+        try {
+            val instructions = mutableListOf<String>()
+            val trimmed = jsonArrayString.trim().removePrefix("[").removeSuffix("]")
+            if (trimmed.isNotEmpty()) {
+                // simple split by stringified json commas if needed, or proper parsing
+                // To keep it simple without extra libraries:
+                val jsonArray = org.json.JSONArray(jsonArrayString)
+                for (i in 0 until jsonArray.length()) {
+                    instructions.add(jsonArray.getString(i))
+                }
+            }
+            scrapedInstructionsList = instructions
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun getScrapedInstructions(): List<String> {
+        return scrapedInstructionsList
+    }
+
     fun getFullUrl(): String? {
         return fullUrl
     }
@@ -414,11 +440,20 @@ class MainActivity : AppCompatActivity() {
         // Check ONLY the string contents of "ri=" parameters to prevent multiple parses for the exact same coordinate setup,
         // while allowing re-parsing if the user navigates to a new itinerary setup on the same base domain
         val currentQuery = uri.toString()
-        val justRiParamsString = currentQuery.split("&", "?").filter { it.startsWith("ri=") }.joinToString("&")
+        val queryParts = currentQuery.split("&", "?")
+        val justRiParamsString = queryParts.filter { it.startsWith("ri=") }.joinToString("&")
 
-        if (justRiParamsString.isNotEmpty() && justRiParamsString == lastParsedUrlQuery) {
+        val currentRcParam = queryParts.firstOrNull { it.startsWith("rc=") }
+
+        if (justRiParamsString.isNotEmpty() && justRiParamsString == lastParsedUrlQuery && currentRcParam == lastRcParam) {
             return
         }
+
+        if (currentRcParam != lastRcParam) {
+            coordinatesList.clear()
+            lastRcParam = currentRcParam
+        }
+
         if (justRiParamsString.isNotEmpty()) {
             lastParsedUrlQuery = justRiParamsString
         }
@@ -482,8 +517,11 @@ class MainActivity : AppCompatActivity() {
                 val validCoords = fetchedCoords.filterNotNull()
                 if (validCoords.isNotEmpty()) {
                     withContext(Dispatchers.Main) {
-                        coordinatesList.clear()
-                        coordinatesList.addAll(validCoords)
+                        validCoords.forEach { newCoord ->
+                            if (!coordinatesList.any { it.lon == newCoord.lon && it.lat == newCoord.lat && it.rawId == newCoord.rawId }) {
+                                coordinatesList.add(newCoord)
+                            }
+                        }
                     }
                     return@launch // success
                 }
@@ -547,8 +585,11 @@ class MainActivity : AppCompatActivity() {
 
             withContext(Dispatchers.Main) {
                 if (manualCoords.isNotEmpty()) {
-                    coordinatesList.clear()
-                    coordinatesList.addAll(manualCoords)
+                    manualCoords.forEach { newCoord ->
+                        if (!coordinatesList.any { it.lon == newCoord.lon && it.lat == newCoord.lat && it.rawId == newCoord.rawId }) {
+                            coordinatesList.add(newCoord)
+                        }
+                    }
                 }
             }
         }
