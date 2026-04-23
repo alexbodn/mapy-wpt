@@ -104,7 +104,7 @@ class MainActivity : AppCompatActivity() {
                 // We should re-parse the URL here to capture any coordinates if we missed them initially.
                 if (url != null) {
                     val currentUri = Uri.parse(url)
-                    if (currentUri.getQueryParameters("ri").isNotEmpty()) {
+                    if (currentUri.getQueryParameters("ri").isNotEmpty() || url.contains("ri=")) {
                         fullUrl = url
                         parseCoordinatesFromUrl(currentUri)
                     }
@@ -411,136 +411,144 @@ class MainActivity : AppCompatActivity() {
         if (riParams.isEmpty() && !hasRiInString) return
 
         // Prevent repeated fetches for the exact same query params
+        // Check ONLY the string contents of "ri=" parameters to prevent multiple parses for the exact same coordinate setup,
+        // while allowing re-parsing if the user navigates to a new itinerary setup on the same base domain
         val currentQuery = uri.toString()
-        if (currentQuery == lastParsedUrlQuery) {
+        val justRiParamsString = currentQuery.split("&", "?").filter { it.startsWith("ri=") }.joinToString("&")
+
+        if (justRiParamsString.isNotEmpty() && justRiParamsString == lastParsedUrlQuery) {
             return
         }
-        lastParsedUrlQuery = currentQuery
+        if (justRiParamsString.isNotEmpty()) {
+            lastParsedUrlQuery = justRiParamsString
+        }
 
         CoroutineScope(Dispatchers.IO).launch {
-            // Use a temporary list mapped to preserve order even if fetched asynchronously
-            val fetchedCoords = arrayOfNulls<WptCoord>(riParams.size)
+            // First, check if Uri parsing correctly returned a non-empty list
+            if (riParams.isNotEmpty()) {
+                // Use a temporary list mapped to preserve order even if fetched asynchronously
+                val fetchedCoords = arrayOfNulls<WptCoord>(riParams.size)
 
-            // Launch parallel fetches for OSM IDs
-            val jobs = riParams.mapIndexed { index, riRaw ->
-                launch {
-                    val ri = riRaw.replace("%2C", ",")
-                    if (ri.contains(",")) {
-                        val parts = ri.split(",")
-                        if (parts.size >= 2) {
-                            try {
-                                val lon = parts[0].toDouble()
-                                val lat = parts[1].toDouble()
-                                fetchedCoords[index] = WptCoord(lon, lat, false)
-                            } catch (e: NumberFormatException) { }
-                        }
-                    } else {
-                        try {
-                            val osmId = ri.toLong()
-                            val osmUrl = URL("https://api.openstreetmap.org/api/0.6/node/$osmId")
-                            val connection = osmUrl.openConnection() as HttpsURLConnection
-                            connection.requestMethod = "GET"
-                            // OSM requires a user agent or it throws 403 / times out
-                            connection.setRequestProperty("User-Agent", "MapyWptSaver/1.0 (Android)")
-                            connection.connectTimeout = 3000
-                            connection.readTimeout = 3000
-
-                            if (connection.responseCode == 200) {
-                                val response = connection.inputStream.bufferedReader().use { it.readText() }
-                                val latMatch = "lat=\"([^\"]+)\"".toRegex().find(response)
-                                val lonMatch = "lon=\"([^\"]+)\"".toRegex().find(response)
-                                if (latMatch != null && lonMatch != null) {
-                                    val lat = latMatch.groupValues[1].toDouble()
-                                    val lon = lonMatch.groupValues[1].toDouble()
-                                    fetchedCoords[index] = WptCoord(lon, lat, true)
-                                } else {
-                                    fetchedCoords[index] = WptCoord(null, null, true, ri)
-                                }
-                            } else {
-                                fetchedCoords[index] = WptCoord(null, null, true, ri)
-                            }
-                            connection.disconnect()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            fetchedCoords[index] = WptCoord(null, null, true, riRaw)
-                        }
-                    }
-                }
-            }
-
-            // Wait for all fetches to finish
-            jobs.forEach { it.join() }
-
-            val validCoords = fetchedCoords.filterNotNull()
-            if (validCoords.isNotEmpty()) {
-                withContext(Dispatchers.Main) {
-                    coordinatesList.clear()
-                    coordinatesList.addAll(validCoords)
-                }
-            }
-
-            // It could be empty if Uri.getQueryParameters extracted no `ri` properly,
-            // BUT our manual extraction string split might work, so always do manual fallback if empty.
-            if (validCoords.isEmpty() || uri.getQueryParameters("ri").isEmpty()) {
-                // Try parsing the query manually if Uri.getQueryParameters failed to extract `ri` parts properly due to fragments
-                val manualCoords = mutableListOf<WptCoord>()
-                val query = uri.query ?: uri.encodedQuery ?: uri.toString()
-                val pairs = query.replace("?", "&").split("&")
-
-                // Launch parallel fetches for OSM IDs found manually
-                val manualJobs = pairs.map { pair ->
+                // Launch parallel fetches for OSM IDs
+                val jobs = riParams.mapIndexed { index, riRaw ->
                     launch {
-                        if (pair.startsWith("ri=")) {
-                            val riRaw = pair.substring(3)
-                            val ri = riRaw.replace("%2C", ",")
+                        val ri = riRaw.replace("%2C", ",")
+                        if (ri.contains(",")) {
                             val parts = ri.split(",")
                             if (parts.size >= 2) {
                                 try {
                                     val lon = parts[0].toDouble()
                                     val lat = parts[1].toDouble()
-                                    synchronized(manualCoords) { manualCoords.add(WptCoord(lon, lat, false)) }
-                                } catch(e: Exception) {
-                                    synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, riRaw)) }
-                                }
-                            } else {
-                                try {
-                                    val osmId = ri.toLong()
-                                    val osmUrl = URL("https://api.openstreetmap.org/api/0.6/node/$osmId")
-                                    val connection = osmUrl.openConnection() as HttpsURLConnection
-                                    connection.requestMethod = "GET"
-                                    connection.setRequestProperty("User-Agent", "MapyWptSaver/1.0 (Android)")
-                                    connection.connectTimeout = 3000
-                                    connection.readTimeout = 3000
+                                    fetchedCoords[index] = WptCoord(lon, lat, false)
+                                } catch (e: NumberFormatException) { }
+                            }
+                        } else {
+                            try {
+                                val osmId = ri.toLong()
+                                val osmUrl = URL("https://api.openstreetmap.org/api/0.6/node/$osmId")
+                                val connection = osmUrl.openConnection() as HttpsURLConnection
+                                connection.requestMethod = "GET"
+                                // OSM requires a user agent or it throws 403 / times out
+                                connection.setRequestProperty("User-Agent", "MapyWptSaver/1.0 (Android)")
+                                connection.connectTimeout = 3000
+                                connection.readTimeout = 3000
 
-                                    if (connection.responseCode == 200) {
-                                        val response = connection.inputStream.bufferedReader().use { it.readText() }
-                                        val latMatch = "lat=\"([^\"]+)\"".toRegex().find(response)
-                                        val lonMatch = "lon=\"([^\"]+)\"".toRegex().find(response)
-                                        if (latMatch != null && lonMatch != null) {
-                                            val lat = latMatch.groupValues[1].toDouble()
-                                            val lon = lonMatch.groupValues[1].toDouble()
-                                            synchronized(manualCoords) { manualCoords.add(WptCoord(lon, lat, true)) }
-                                        } else {
-                                            synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, ri)) }
-                                        }
+                                if (connection.responseCode == 200) {
+                                    val response = connection.inputStream.bufferedReader().use { it.readText() }
+                                    val latMatch = "lat=\"([^\"]+)\"".toRegex().find(response)
+                                    val lonMatch = "lon=\"([^\"]+)\"".toRegex().find(response)
+                                    if (latMatch != null && lonMatch != null) {
+                                        val lat = latMatch.groupValues[1].toDouble()
+                                        val lon = lonMatch.groupValues[1].toDouble()
+                                        fetchedCoords[index] = WptCoord(lon, lat, true)
                                     } else {
-                                        synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, ri)) }
+                                        fetchedCoords[index] = WptCoord(null, null, true, ri)
                                     }
-                                    connection.disconnect()
-                                } catch (e: Exception) {
-                                    synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, riRaw)) }
+                                } else {
+                                    fetchedCoords[index] = WptCoord(null, null, true, ri)
                                 }
+                                connection.disconnect()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                fetchedCoords[index] = WptCoord(null, null, true, riRaw)
                             }
                         }
                     }
                 }
-                manualJobs.forEach { it.join() }
 
-                withContext(Dispatchers.Main) {
-                    if (manualCoords.isNotEmpty()) {
+                // Wait for all fetches to finish
+                jobs.forEach { it.join() }
+
+                val validCoords = fetchedCoords.filterNotNull()
+                if (validCoords.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
                         coordinatesList.clear()
-                        coordinatesList.addAll(manualCoords)
+                        coordinatesList.addAll(validCoords)
                     }
+                    return@launch // success
+                }
+            }
+
+            // If it was empty or `uri.getQueryParameters` extracted no `ri` properly,
+            // BUT our manual extraction string split might work, do manual fallback.
+            // Try parsing the query manually if Uri.getQueryParameters failed to extract `ri` parts properly due to fragments
+            val manualCoords = mutableListOf<WptCoord>()
+            val query = uri.query ?: uri.encodedQuery ?: uri.toString()
+            val pairs = query.replace("?", "&").split("&")
+
+            // Launch parallel fetches for OSM IDs found manually
+            val manualJobs = pairs.map { pair ->
+                launch {
+                    if (pair.startsWith("ri=")) {
+                        val riRaw = pair.substring(3)
+                        val ri = riRaw.replace("%2C", ",")
+                        val parts = ri.split(",")
+                        if (parts.size >= 2) {
+                            try {
+                                val lon = parts[0].toDouble()
+                                val lat = parts[1].toDouble()
+                                synchronized(manualCoords) { manualCoords.add(WptCoord(lon, lat, false)) }
+                            } catch(e: Exception) {
+                                synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, riRaw)) }
+                            }
+                        } else {
+                            try {
+                                val osmId = ri.toLong()
+                                val osmUrl = URL("https://api.openstreetmap.org/api/0.6/node/$osmId")
+                                val connection = osmUrl.openConnection() as HttpsURLConnection
+                                connection.requestMethod = "GET"
+                                connection.setRequestProperty("User-Agent", "MapyWptSaver/1.0 (Android)")
+                                connection.connectTimeout = 3000
+                                connection.readTimeout = 3000
+
+                                if (connection.responseCode == 200) {
+                                    val response = connection.inputStream.bufferedReader().use { it.readText() }
+                                    val latMatch = "lat=\"([^\"]+)\"".toRegex().find(response)
+                                    val lonMatch = "lon=\"([^\"]+)\"".toRegex().find(response)
+                                    if (latMatch != null && lonMatch != null) {
+                                        val lat = latMatch.groupValues[1].toDouble()
+                                        val lon = lonMatch.groupValues[1].toDouble()
+                                        synchronized(manualCoords) { manualCoords.add(WptCoord(lon, lat, true)) }
+                                    } else {
+                                        synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, ri)) }
+                                    }
+                                } else {
+                                    synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, ri)) }
+                                }
+                                connection.disconnect()
+                            } catch (e: Exception) {
+                                synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, riRaw)) }
+                            }
+                        }
+                    }
+                }
+            }
+            manualJobs.forEach { it.join() }
+
+            withContext(Dispatchers.Main) {
+                if (manualCoords.isNotEmpty()) {
+                    coordinatesList.clear()
+                    coordinatesList.addAll(manualCoords)
                 }
             }
         }
