@@ -24,7 +24,7 @@ import javax.net.ssl.HttpsURLConnection
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    data class WptCoord(val lon: Double, val lat: Double, val isOsm: Boolean = false)
+    data class WptCoord(val lon: Double?, val lat: Double?, val isOsm: Boolean = false, val rawId: String? = null)
     private var coordinatesList = mutableListOf<WptCoord>()
     private var fullUrl: String? = null
 
@@ -237,6 +237,13 @@ class MainActivity : AppCompatActivity() {
                         }
 
                         for (let i = 0; i < coords.length; i++) {
+                            if (coords[i].lat === null || coords[i].lon === null) {
+                                wptXml += '  <!-- <wpt lat="UNKNOWN" lon="UNKNOWN"> -->\n';
+                                wptXml += '  <!--   <name>' + (i + 1) + '</name> -->\n';
+                                wptXml += '  <!--   <desc>Unresolved point (ID: ' + (coords[i].rawId || 'unknown') + ')</desc> -->\n';
+                                wptXml += '  <!-- </wpt> -->\n';
+                                continue;
+                            }
                             wptXml += '  <wpt lat="' + coords[i].lat + '" lon="' + coords[i].lon + '">\n';
                             wptXml += '    <name>' + (i + 1) + '</name>\n';
 
@@ -444,11 +451,16 @@ class MainActivity : AppCompatActivity() {
                                     val lat = latMatch.groupValues[1].toDouble()
                                     val lon = lonMatch.groupValues[1].toDouble()
                                     fetchedCoords[index] = WptCoord(lon, lat, true)
+                                } else {
+                                    fetchedCoords[index] = WptCoord(null, null, true, ri)
                                 }
+                            } else {
+                                fetchedCoords[index] = WptCoord(null, null, true, ri)
                             }
                             connection.disconnect()
                         } catch (e: Exception) {
                             e.printStackTrace()
+                            fetchedCoords[index] = WptCoord(null, null, true, riRaw)
                         }
                     }
                 }
@@ -478,7 +490,11 @@ class MainActivity : AppCompatActivity() {
                                     val lon = parts[0].toDouble()
                                     val lat = parts[1].toDouble()
                                     manualCoords.add(WptCoord(lon, lat, false))
-                                } catch(e: Exception) {}
+                                } catch(e: Exception) {
+                                    manualCoords.add(WptCoord(null, null, true, ri))
+                                }
+                            } else {
+                                manualCoords.add(WptCoord(null, null, true, ri))
                             }
                         }
                     }

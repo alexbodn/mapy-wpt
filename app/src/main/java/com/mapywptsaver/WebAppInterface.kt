@@ -13,7 +13,10 @@ class WebAppInterface(
             val coords = mContext.getCoordinatesList()
             val sb = StringBuilder("[")
             for ((index, coord) in coords.withIndex()) {
-                sb.append("{\"lon\":${coord.lon},\"lat\":${coord.lat},\"isOsm\":${coord.isOsm}}")
+                val lonStr = coord.lon?.toString() ?: "null"
+                val latStr = coord.lat?.toString() ?: "null"
+                val rawIdStr = coord.rawId?.let { "\"$it\"" } ?: "null"
+                sb.append("{\"lon\":$lonStr,\"lat\":$latStr,\"isOsm\":${coord.isOsm},\"rawId\":$rawIdStr}")
                 if (index < coords.size - 1) {
                     sb.append(",")
                 }
