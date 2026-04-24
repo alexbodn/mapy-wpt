@@ -98,6 +98,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupWebViewClient() {
         webView.webViewClient = object : WebViewClient() {
+            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                super.doUpdateVisitedHistory(view, url, isReload)
+                if (url != null) {
+                    val currentUri = Uri.parse(url)
+                    if (currentUri.getQueryParameters("ri").isNotEmpty() || url.contains("ri=")) {
+                        fullUrl = url
+                        parseCoordinatesFromUrl(currentUri)
+                    }
+                }
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
 
@@ -440,7 +451,8 @@ class MainActivity : AppCompatActivity() {
         // Check ONLY the string contents of "ri=" parameters to prevent multiple parses for the exact same coordinate setup,
         // while allowing re-parsing if the user navigates to a new itinerary setup on the same base domain
         val currentQuery = uri.toString()
-        val queryParts = currentQuery.split("&", "?")
+        // Mapy uses `#` for fragments which android Uri parser misses. we should split by `#`, `?`, `&`
+        val queryParts = currentQuery.split("&", "?", "#")
         // Filter out empty ri parameters (e.g. `&ri=&ri=`)
         val justRiParamsString = queryParts.filter { it.startsWith("ri=") && it.length > 3 }.joinToString("&")
 
@@ -465,8 +477,8 @@ class MainActivity : AppCompatActivity() {
             // We use a robust manual extraction string split to guarantee all coordinates are fetched.
 
             val manualCoords = mutableListOf<WptCoord>()
-            val query = uri.query ?: uri.encodedQuery ?: uri.toString()
-            val pairs = query.replace("?", "&").split("&")
+            val query = uri.toString()
+            val pairs = query.split("&", "?", "#")
 
             // Launch parallel fetches for OSM IDs found manually
             val manualJobs = pairs.map { pair ->
