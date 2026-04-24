@@ -297,10 +297,14 @@ class MainActivity : AppCompatActivity() {
                         const gpxTagEnd = gpxText.indexOf('>', gpxTagIndex) + 1;
                         if (gpxTagIndex >= 0 && gpxTagEnd > 0) {
                             let gpxOpenTag = gpxText.substring(gpxTagIndex, gpxTagEnd);
+
+                            // Some apps (like OsmAnd) strictly require the osmand namespace for osmand:* elements
+                            // We also need to strip any trailing slash before the > so it's properly closed if it was self-closing
                             if (!gpxOpenTag.includes('xmlns:osmand')) {
-                                // robust insertion before the closing >
-                                gpxOpenTag = gpxOpenTag.replace(/>/, ' xmlns:osmand="https://osmand.net">');
+                                gpxOpenTag = gpxOpenTag.replace(/\/?\s*>/, ' xmlns:osmand="https://osmand.net">');
                             }
+
+                            // Insert waypoints right after the opening <gpx> tag
                             gpxText = gpxText.substring(0, gpxTagIndex) + gpxOpenTag + '\n' + wptXml + gpxText.substring(gpxTagEnd);
                             AndroidInterface.showToast("Injected " + coords.length + " wpts!");
                         } else {
