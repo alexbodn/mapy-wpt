@@ -441,7 +441,8 @@ class MainActivity : AppCompatActivity() {
         // while allowing re-parsing if the user navigates to a new itinerary setup on the same base domain
         val currentQuery = uri.toString()
         val queryParts = currentQuery.split("&", "?")
-        val justRiParamsString = queryParts.filter { it.startsWith("ri=") }.joinToString("&")
+        // Filter out empty ri parameters (e.g. `&ri=&ri=`)
+        val justRiParamsString = queryParts.filter { it.startsWith("ri=") && it.length > 3 }.joinToString("&")
 
         val currentRcParam = queryParts.firstOrNull { it.startsWith("rc=") }
 
@@ -459,13 +460,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         CoroutineScope(Dispatchers.IO).launch {
+            // Filter out blank params returned by Android Uri parser
+            val validRiParams = riParams.filter { it.isNotBlank() }
+
             // First, check if Uri parsing correctly returned a non-empty list
-            if (riParams.isNotEmpty()) {
+            if (validRiParams.isNotEmpty()) {
                 // Use a temporary list mapped to preserve order even if fetched asynchronously
-                val fetchedCoords = arrayOfNulls<WptCoord>(riParams.size)
+                val fetchedCoords = arrayOfNulls<WptCoord>(validRiParams.size)
 
                 // Launch parallel fetches for OSM IDs
-                val jobs = riParams.mapIndexed { index, riRaw ->
+                val jobs = validRiParams.mapIndexed { index, riRaw ->
                     launch {
                         val ri = riRaw.replace("%2C", ",")
                         if (ri.contains(",")) {
@@ -540,6 +544,8 @@ class MainActivity : AppCompatActivity() {
                     if (pair.startsWith("ri=")) {
                         val riRaw = pair.substring(3)
                         val ri = riRaw.replace("%2C", ",")
+                        if (riRaw.isBlank()) return@launch // Skip empty ri parameters
+
                         val parts = ri.split(",")
                         if (parts.size >= 2) {
                             try {
