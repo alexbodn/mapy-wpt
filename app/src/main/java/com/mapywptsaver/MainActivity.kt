@@ -450,7 +450,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        if (currentRcParam != lastRcParam) {
+        if (currentRcParam != null && currentRcParam != lastRcParam) {
             coordinatesList.clear()
             lastRcParam = currentRcParam
         }
