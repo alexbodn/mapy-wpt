@@ -254,13 +254,14 @@ class MainActivity : AppCompatActivity() {
                             wptXml += '\n  <!-- source_url: ' + sourceUrl.replace(/--/g, '- -') + ' -->\n';
                         }
 
+                        let wptIndex = 1;
                         for (let i = 0; i < coords.length; i++) {
                             if (coords[i].lat === null || coords[i].lon === null) {
                                 wptXml += '  <!-- Non-coordinate point ID: ' + (coords[i].rawId || 'unknown') + ' -->\n';
                                 continue;
                             }
                             wptXml += '  <wpt lat="' + coords[i].lat + '" lon="' + coords[i].lon + '">\n';
-                            wptXml += '    <name>' + (i + 1) + '</name>\n';
+                            wptXml += '    <name>' + wptIndex + '</name>\n';
 
                             let descParts = [];
 
@@ -282,11 +283,12 @@ class MainActivity : AppCompatActivity() {
                             // OsmAnd styling extensions
                             wptXml += '    <extensions>\n';
                             wptXml += '      <osmand:color>#ff0000</osmand:color>\n';
-                            wptXml += '      <osmand:icon>number_' + (i + 1) + '</osmand:icon>\n';
+                            wptXml += '      <osmand:icon>number_' + wptIndex + '</osmand:icon>\n';
                             wptXml += '      <osmand:background>circle</osmand:background>\n';
                             wptXml += '    </extensions>\n';
 
                             wptXml += '  </wpt>\n';
+                            wptIndex++;
                         }
 
                         // Insert after <gpx ...> (case-insensitive search just in case)
