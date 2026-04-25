@@ -256,10 +256,7 @@ class MainActivity : AppCompatActivity() {
 
                         for (let i = 0; i < coords.length; i++) {
                             if (coords[i].lat === null || coords[i].lon === null) {
-                                wptXml += '  <!-- <wpt lat="UNKNOWN" lon="UNKNOWN"> -->\n';
-                                wptXml += '  <!--   <name>' + (i + 1) + '</name> -->\n';
-                                wptXml += '  <!--   <desc>Unresolved point (ID: ' + (coords[i].rawId || 'unknown') + ')</desc> -->\n';
-                                wptXml += '  <!-- </wpt> -->\n';
+                                wptXml += '  <!-- Non-coordinate point ID: ' + (coords[i].rawId || 'unknown') + ' -->\n';
                                 continue;
                             }
                             wptXml += '  <wpt lat="' + coords[i].lat + '" lon="' + coords[i].lon + '">\n';
@@ -480,68 +477,42 @@ class MainActivity : AppCompatActivity() {
             // which mapy.com routinely does during heavy redirects.
             // We use a robust manual extraction string split to guarantee all coordinates are fetched.
 
-            val manualCoords = mutableListOf<WptCoord>()
             val query = uri.toString()
-            val pairs = query.split("&", "?", "#")
+            val pairs = query.split("&", "?", "#").filter { it.startsWith("ri=") && it.length > 3 }
 
-            // Launch parallel fetches for OSM IDs found manually
-            val manualJobs = pairs.map { pair ->
+            val parsedCoords = arrayOfNulls<WptCoord>(pairs.size)
+
+            val manualJobs = pairs.mapIndexed { index, pair ->
                 launch {
-                    if (pair.startsWith("ri=")) {
-                        val riRaw = pair.substring(3)
-                        val ri = riRaw.replace("%2C", ",")
-                        if (riRaw.isBlank()) return@launch // Skip empty ri parameters
+                    val riRaw = pair.substring(3)
+                    val ri = riRaw.replace("%2C", ",")
+                    val parts = ri.split(",")
 
-                        val parts = ri.split(",")
-                        if (parts.size >= 2) {
-                            try {
-                                val lon = parts[0].toDouble()
-                                val lat = parts[1].toDouble()
-                                synchronized(manualCoords) { manualCoords.add(WptCoord(lon, lat, false)) }
-                            } catch(e: Exception) {
-                                synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, riRaw)) }
-                            }
-                        } else {
-                            try {
-                                val osmId = ri.toLong()
-                                val osmUrl = URL("https://api.openstreetmap.org/api/0.6/node/$osmId")
-                                val connection = osmUrl.openConnection() as HttpsURLConnection
-                                connection.requestMethod = "GET"
-                                connection.setRequestProperty("User-Agent", "MapyWptSaver/1.0 (Android)")
-                                connection.connectTimeout = 3000
-                                connection.readTimeout = 3000
-
-                                if (connection.responseCode == 200) {
-                                    val response = connection.inputStream.bufferedReader().use { it.readText() }
-                                    val latMatch = "lat=\"([^\"]+)\"".toRegex().find(response)
-                                    val lonMatch = "lon=\"([^\"]+)\"".toRegex().find(response)
-                                    if (latMatch != null && lonMatch != null) {
-                                        val lat = latMatch.groupValues[1].toDouble()
-                                        val lon = lonMatch.groupValues[1].toDouble()
-                                        synchronized(manualCoords) { manualCoords.add(WptCoord(lon, lat, true)) }
-                                    } else {
-                                        synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, ri)) }
-                                    }
-                                } else {
-                                    synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, ri)) }
-                                }
-                                connection.disconnect()
-                            } catch (e: Exception) {
-                                synchronized(manualCoords) { manualCoords.add(WptCoord(null, null, true, riRaw)) }
-                            }
+                    if (parts.size >= 2) {
+                        try {
+                            val lon = parts[0].toDouble()
+                            val lat = parts[1].toDouble()
+                            parsedCoords[index] = WptCoord(lon, lat, false)
+                        } catch(e: Exception) {
+                            parsedCoords[index] = WptCoord(null, null, false, riRaw)
                         }
+                    } else {
+                        // Mapy IDs are NOT OSM Node IDs. They are internal Mapy POI IDs.
+                        // We cannot resolve them via api.openstreetmap.org.
+                        // So we store them as unresolved IDs to be commented out in the GPX.
+                        parsedCoords[index] = WptCoord(null, null, false, riRaw)
                     }
                 }
             }
             manualJobs.forEach { it.join() }
 
+            val validCoords = parsedCoords.filterNotNull()
+
             withContext(Dispatchers.Main) {
-                if (manualCoords.isNotEmpty()) {
-                    manualCoords.forEach { newCoord ->
-                        if (!coordinatesList.any { it.lon == newCoord.lon && it.lat == newCoord.lat && it.rawId == newCoord.rawId }) {
-                            coordinatesList.add(newCoord)
-                        }
-                    }
+                if (validCoords.isNotEmpty()) {
+                    // Fully replace coordinates list to guarantee exact ordered preservation from URL
+                    coordinatesList.clear()
+                    coordinatesList.addAll(validCoords)
                 }
             }
         }
