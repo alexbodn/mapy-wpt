@@ -24,9 +24,20 @@ class WebAppInterface(
                 var instructionText = "null"
                 // If it's a valid coordinate point
                 if (coord.lon != null && coord.lat != null) {
-                    // Assign the instruction mapped to the PREVIOUS valid coordinate's segment
-                    if (wptCount < instructions.size) {
+                    // Because there might be missing instructions or extra points, try to match safely
+                    if (wptCount < instructions.size && instructions[wptCount].isNotEmpty()) {
                         instructionText = "\"" + instructions[wptCount].replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "") + "\""
+                    } else if (wptCount > 0 && wptCount - 1 < instructions.size && instructions[wptCount - 1].isNotEmpty()) {
+                        // fallback to previous instruction if current is empty (Mapy itinerary lists often clump instructions after a start node)
+                        instructionText = "\"" + instructions[wptCount - 1].replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "") + "\""
+                    } else if (instructions.isNotEmpty()) {
+                         // Find the closest non-empty string backwards if we exhausted elements but still have data
+                         for (i in minOf(wptCount, instructions.size - 1) downTo 0) {
+                             if (instructions[i].isNotEmpty()) {
+                                 instructionText = "\"" + instructions[i].replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "") + "\""
+                                 break
+                             }
+                         }
                     }
                     wptCount++
                 }

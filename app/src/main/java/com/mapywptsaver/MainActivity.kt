@@ -181,45 +181,36 @@ class MainActivity : AppCompatActivity() {
                                     // Usually they appear as titles right before or inside the point element.
                                     // Turn-by-turn instructions often contain specific keywords.
 
-                                    if (text.includes('N') && text.includes('E') && (text.match(/\d+\.\d+/g) || []).length >= 2) {
-                                        // This looks like a coordinate point marker
+                                    const lowerText = text.toLowerCase();
 
-                                        // Try to find an explicit title nearby in the DOM if we can
-                                        let pointTitle = '';
-                                        const titleNode = nodes[i].querySelector('.title, h1, h2, h3, h4, strong, b');
-                                        if (titleNode && titleNode.innerText) {
-                                            pointTitle = titleNode.innerText.trim();
-                                        } else if (i > 0) {
-                                            // Look at previous node to see if it's a short descriptive title without coordinates
-                                            const prevText = nodes[i-1].innerText || '';
-                                            if (prevText.length > 0 && prevText.length < 50 && !prevText.includes('N') && !prevText.toLowerCase().includes('turn')) {
-                                                pointTitle = prevText.replace(/\n+/g, ' ').trim();
-                                            }
+                                    if (lowerText.includes('turn ') || lowerText.includes('continue ') || lowerText.includes('keep ') || lowerText.includes('head ') || lowerText.includes('take the')) {
+                                        // Looks like a navigation instruction
+                                        let cleanText = text.replace(/\n+/g, ' ').trim();
+                                        if (cleanText && !currentSegment.includes(cleanText)) {
+                                            currentSegment.push(cleanText);
                                         }
-
-                                        if (pointTitle && pointTitle.length > 0 && pointTitle !== 'Start' && pointTitle !== 'Finish') {
-                                            currentSegment.unshift(pointTitle + '\n---'); // add title to the top of the segment
-                                        }
-
+                                    } else if (nodes[i].querySelector && nodes[i].querySelector('.point-title, .title, strong, b')) {
+                                        // If this node represents a route point (usually indicated by strong styling)
                                         if (currentSegment.length > 0) {
                                             instructions.push(currentSegment.join('\n'));
                                             currentSegment = [];
-                                        } else if (instructions.length === 0 && segmentIndex === 0) {
-                                            // First point, push empty if no instructions before it
-                                            instructions.push(pointTitle);
-                                        } else {
-                                            instructions.push(pointTitle);
                                         }
                                         segmentIndex++;
-                                    } else if (text.toLowerCase().includes('turn') || text.toLowerCase().includes('continue') || text.toLowerCase().includes('keep') || text.toLowerCase().includes('head')) {
-                                        // Looks like a navigation instruction
-                                        let cleanText = text.replace(/\n+/g, ' ').trim();
-                                        if (cleanText) {
-                                            currentSegment.push(cleanText);
+                                    } else if (text.includes('N') && text.includes('E') && (text.match(/\d+\.\d+/g) || []).length >= 2) {
+                                        // Fallback coordinate point marker
+                                        if (currentSegment.length > 0) {
+                                            instructions.push(currentSegment.join('\n'));
+                                            currentSegment = [];
+                                        } else {
+                                            // Ensure we always add an empty slot if we hit a waypoint so indexing aligns
+                                            instructions.push("");
                                         }
+                                        segmentIndex++;
                                     }
                                 }
                             }
+
+                            // Flush any remaining trailing instructions
                             if (currentSegment.length > 0) {
                                 instructions.push(currentSegment.join('\n'));
                             }
@@ -227,9 +218,13 @@ class MainActivity : AppCompatActivity() {
                     } catch (e) {
                         console.error('Error scraping itinerary', e);
                     }
+
+                    // Filter down to valid strings, even if empty, so the JSON is an array of strings
+                    const cleanInstructions = instructions.map(inst => (inst || "").trim());
+
                     // Send to Android immediately after scraping just in case
-                    AndroidInterface.saveInstructions(JSON.stringify(instructions));
-                    return instructions;
+                    AndroidInterface.saveInstructions(JSON.stringify(cleanInstructions));
+                    return cleanInstructions;
                 }
 
                 // Do a periodic scrape to keep instructions updated
